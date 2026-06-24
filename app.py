@@ -84,10 +84,18 @@ st.sidebar.markdown("---")
 st.sidebar.header("💰 Cuotas (opcional)")
 usar_cuotas = st.sidebar.checkbox("Analizar valor de apuesta")
 cuota_h = cuota_e = cuota_a = None
+cuota_over25 = cuota_under25 = cuota_ambos_si = cuota_ambos_no = None
 if usar_cuotas:
+    st.sidebar.subheader("1X2")
     cuota_h = st.sidebar.number_input("Cuota Gana Local", min_value=1.01, value=2.00, step=0.05)
     cuota_e = st.sidebar.number_input("Cuota Empate", min_value=1.01, value=3.50, step=0.05)
     cuota_a = st.sidebar.number_input("Cuota Gana Visitante", min_value=1.01, value=3.00, step=0.05)
+    st.sidebar.subheader("Over/Under")
+    cuota_over25 = st.sidebar.number_input("Cuota Over 2.5", min_value=1.01, value=2.10, step=0.05)
+    cuota_under25 = st.sidebar.number_input("Cuota Under 2.5", min_value=1.01, value=1.75, step=0.05)
+    st.sidebar.subheader("Ambos Anotan")
+    cuota_ambos_si = st.sidebar.number_input("Cuota Ambos Anotan SI", min_value=1.01, value=1.90, step=0.05)
+    cuota_ambos_no = st.sidebar.number_input("Cuota Ambos Anotan NO", min_value=1.01, value=1.90, step=0.05)
 
 if st.sidebar.button("🔍 Analizar", use_container_width=True):
     if home == away:
@@ -98,11 +106,12 @@ if st.sidebar.button("🔍 Analizar", use_container_width=True):
         forma_a, factor_a = forma_reciente(away)
         lam = np.exp(ATT[h] - DFN[a]) * factor_h
         mu  = np.exp(ATT[a] - DFN[h]) * factor_a
-        MAXG = 7
+        MAXG = 10
         matriz = np.zeros((MAXG,MAXG))
         for i in range(MAXG):
             for j in range(MAXG):
                 matriz[i,j] = tau_dc(i,j,lam,mu,RHO)*poisson.pmf(i,lam)*poisson.pmf(j,mu)
+
         prob_h = np.sum(np.tril(matriz,-1))
         prob_d = np.sum(np.diag(matriz))
         prob_a = np.sum(np.triu(matriz,1))
@@ -110,14 +119,42 @@ if st.sidebar.button("🔍 Analizar", use_container_width=True):
         mejor = marcadores[0]
         pred = f"Gana {home}" if prob_h>prob_a and prob_h>prob_d else ("Empate" if prob_d>prob_h and prob_d>prob_a else f"Gana {away}")
 
+        # Over/Under
+        prob_over25 = sum(matriz[i,j] for i in range(MAXG) for j in range(MAXG) if i+j > 2)
+        prob_under25 = 1 - prob_over25
+        prob_over15 = sum(matriz[i,j] for i in range(MAXG) for j in range(MAXG) if i+j > 1)
+        prob_under15 = 1 - prob_over15
+        prob_over35 = sum(matriz[i,j] for i in range(MAXG) for j in range(MAXG) if i+j > 3)
+        prob_under35 = 1 - prob_over35
+
+        # Ambos anotan
+        prob_ambos_si = sum(matriz[i,j] for i in range(MAXG) for j in range(MAXG) if i>0 and j>0)
+        prob_ambos_no = 1 - prob_ambos_si
+
+        # Métricas principales
+        st.markdown("## 🏆 Resultado")
         col1, col2, col3, col4 = st.columns(4)
         col1.metric(f"Gana {home}", f"{prob_h*100:.1f}%")
         col2.metric("Empate", f"{prob_d*100:.1f}%")
         col3.metric(f"Gana {away}", f"{prob_a*100:.1f}%")
         col4.metric("Marcador probable", f"{mejor[0]}-{mejor[1]}")
+        st.markdown(f"### 🎯 Predicción: **{pred}**")
 
-        st.markdown(f"### 🏆 Predicción: **{pred}**")
+        # Over/Under display
+        st.markdown("## ⚽ Goles")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Over 1.5", f"{prob_over15*100:.1f}%", f"Under {prob_under15*100:.1f}%")
+        col2.metric("Over 2.5", f"{prob_over25*100:.1f}%", f"Under {prob_under25*100:.1f}%")
+        col3.metric("Over 3.5", f"{prob_over35*100:.1f}%", f"Under {prob_under35*100:.1f}%")
 
+        # Ambos anotan
+        st.markdown("## 🥅 Ambos Anotan")
+        col1, col2 = st.columns(2)
+        col1.metric("Ambos Anotan SI", f"{prob_ambos_si*100:.1f}%")
+        col2.metric("Ambos Anotan NO", f"{prob_ambos_no*100:.1f}%")
+
+        # Gráficos
+        st.markdown("## 📊 Análisis Visual")
         col1, col2 = st.columns(2)
         with col1:
             fig1, ax1 = plt.subplots(figsize=(5,5))
@@ -127,7 +164,7 @@ if st.sidebar.button("🔍 Analizar", use_container_width=True):
                     labels=[f"Gana {home}","Empate",f"Gana {away}"],
                     autopct="%1.1f%%", colors=["#238636","#e3b341","#da3633"],
                     textprops={"color":"white"})
-            ax1.set_title("Probabilidades", color="white")
+            ax1.set_title("Probabilidades 1X2", color="white")
             st.pyplot(fig1)
 
         with col2:
@@ -143,7 +180,7 @@ if st.sidebar.button("🔍 Analizar", use_container_width=True):
             ax2.spines[:].set_color("#30363d")
             st.pyplot(fig2)
 
-        st.markdown("### 🗺️ Mapa de Calor de Marcadores")
+        st.markdown("### 🗺️ Mapa de Calor")
         fig3, ax3 = plt.subplots(figsize=(8,5))
         fig3.patch.set_facecolor("#0d1117")
         ax3.set_facecolor("#161b22")
@@ -170,19 +207,45 @@ if st.sidebar.button("🔍 Analizar", use_container_width=True):
             emoji = "".join(["🟢" if r=="W" else "🟡" if r=="D" else "🔴" for r in forma_a])
             st.write(emoji if emoji else "Sin datos recientes")
 
-        if usar_cuotas and cuota_h and cuota_e and cuota_a:
-            st.markdown("### 💰 Análisis de Valor")
-            val_h = prob_h * cuota_h - 1
-            val_e = prob_d * cuota_e - 1
-            val_a = prob_a * cuota_a - 1
+        if usar_cuotas and cuota_h:
+            st.markdown("## 💰 Análisis de Valor")
+
+            st.markdown("### 1X2")
             col1, col2, col3 = st.columns(3)
-            for col, label, val, prob, cuota in [
-                (col1, f"Gana {home}", val_h, prob_h, cuota_h),
-                (col2, "Empate", val_e, prob_d, cuota_e),
-                (col3, f"Gana {away}", val_a, prob_a, cuota_a)
+            for col, label, val_prob, cuota in [
+                (col1, f"Gana {home}", prob_h, cuota_h),
+                (col2, "Empate", prob_d, cuota_e),
+                (col3, f"Gana {away}", prob_a, cuota_a)
             ]:
+                val = val_prob * cuota - 1
                 with col:
                     if val > 0.05:
-                        st.success(f"✅ **{label}**\nValor: +{val:.3f}\nCuota: {cuota} | Modelo: {prob*100:.1f}%")
+                        st.success(f"✅ **{label}**\nValor: +{val:.3f}\nModelo: {val_prob*100:.1f}%")
                     else:
-                        st.error(f"❌ **{label}**\nValor: {val:.3f}\nCuota: {cuota} | Modelo: {prob*100:.1f}%")
+                        st.error(f"❌ **{label}**\nValor: {val:.3f}\nModelo: {val_prob*100:.1f}%")
+
+            st.markdown("### Over/Under 2.5")
+            col1, col2 = st.columns(2)
+            for col, label, val_prob, cuota in [
+                (col1, "Over 2.5", prob_over25, cuota_over25),
+                (col2, "Under 2.5", prob_under25, cuota_under25)
+            ]:
+                val = val_prob * cuota - 1
+                with col:
+                    if val > 0.05:
+                        st.success(f"✅ **{label}**\nValor: +{val:.3f}\nModelo: {val_prob*100:.1f}%")
+                    else:
+                        st.error(f"❌ **{label}**\nValor: {val:.3f}\nModelo: {val_prob*100:.1f}%")
+
+            st.markdown("### Ambos Anotan")
+            col1, col2 = st.columns(2)
+            for col, label, val_prob, cuota in [
+                (col1, "Ambos Anotan SI", prob_ambos_si, cuota_ambos_si),
+                (col2, "Ambos Anotan NO", prob_ambos_no, cuota_ambos_no)
+            ]:
+                val = val_prob * cuota - 1
+                with col:
+                    if val > 0.05:
+                        st.success(f"✅ **{label}**\nValor: +{val:.3f}\nModelo: {val_prob*100:.1f}%")
+                    else:
+                        st.error(f"❌ **{label}**\nValor: {val:.3f}\nModelo: {val_prob*100:.1f}%")
