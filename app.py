@@ -19,7 +19,7 @@ def cargar_y_entrenar():
     df = df.dropna(subset=["home_score","away_score"])
     DESDE = pd.Timestamp("2018-01-01")
     HALF_LIFE = 547
-    MATCH_DATE = pd.Timestamp("2026-06-25")
+    MATCH_DATE = pd.Timestamp.today()
     df_mod = df[df.date >= DESDE].copy().reset_index(drop=True)
     df_mod["w"] = 0.5 ** ((MATCH_DATE - df_mod["date"]).dt.days / HALF_LIFE)
     teams = sorted(set(df_mod["home_team"]) | set(df_mod["away_team"]))
